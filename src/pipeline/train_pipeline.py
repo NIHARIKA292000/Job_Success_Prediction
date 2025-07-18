@@ -1,38 +1,53 @@
 import os
 import sys
-import pandas as pd
-import numpy as np
+import pickle
+from dataclasses import dataclass
 
-from src.components.data_ingestion import DataIngestion
-from src.components.data_transformation import DataTransformation
-from src.components.model_trainer import ModelTrainer
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
 from src.exception import CustomException
 from src.logger import logging
 
-def main():
-    try:
-        logging.info("🚀 Starting the model training pipeline...")
+@dataclass
+class ModelTrainerConfig:
+    trained_model_file_path: str = os.path.join("rf_model.pkl")
+    feature_columns_file_path: str = os.path.join("feature_columns.pkl")
 
-        # Step 1: Data Ingestion
-        ingestion = DataIngestion()
-        train_data_path, test_data_path = ingestion.initiate_data_ingestion()
-        logging.info(f"✅ Data ingestion completed. Train: {train_data_path}, Test: {test_data_path}")
+class ModelTrainer:
+    def __init__(self):
+        self.config = ModelTrainerConfig()
 
-        # Step 2: Data Transformation
-        transformation = DataTransformation()
-        train_array, test_array, _ = transformation.initiate_data_transformation(train_data_path, test_data_path)
-        logging.info("✅ Data transformation completed.")
+    def initiate_model_trainer(self, train_array, test_array):
+        try:
+            logging.info("🔧 Splitting training and test data...")
+            X_train, y_train = train_array[:, :-1], train_array[:, -1]
+            X_test, y_test = test_array[:, :-1], test_array[:, -1]
 
-        # Step 3: Model Training
-        trainer = ModelTrainer()
-        final_accuracy = trainer.initiate_model_trainer(train_array, test_array)
-        logging.info(f"✅ Model training completed. Final Test Accuracy: {final_accuracy:.4f}")
+            logging.info("📦 Training RandomForest model...")
+            model = RandomForestClassifier()
+            model.fit(X_train, y_train)
 
-        print(f"\n🎯 Final Random Forest Test Accuracy: {final_accuracy:.4f}")
+            logging.info("🔍 Evaluating model...")
+            y_pred = model.predict(X_test)
+            accuracy = accuracy_score(y_test, y_pred)
 
-    except Exception as e:
-        logging.error("❌ Training pipeline failed due to an exception.")
-        raise CustomException(e, sys)
+            logging.info(f"✅ Model accuracy on test set: {accuracy:.4f}")
 
-if __name__ == "__main__":
-    main()
+            # Save trained model
+            with open(self.config.trained_model_file_path, "wb") as f:
+                pickle.dump(model, f)
+                logging.info(f"💾 Model saved to {self.config.trained_model_file_path}")
+
+            # Save feature columns (for prediction-time use in app.py)
+            feature_columns = [f"feature_{i}" for i in range(X_train.shape[1])]
+            with open(self.config.feature_columns_file_path, "wb") as f:
+                pickle.dump(feature_columns, f)
+                logging.info(f"📁 Feature columns saved to {self.config.feature_columns_file_path}")
+
+            return accuracy
+
+        except Exception as e:
+            logging.error("❌ Exception occurred in ModelTrainer")
+            raise CustomException(e, sys)
+

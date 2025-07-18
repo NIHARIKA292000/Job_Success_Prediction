@@ -52,4 +52,8 @@ class DataIngestion:
 
 # Optional test run
 if __name__ == "__main__":
-    ingestion = DataIngestion
+    obj = DataIngestion()
+    train_data_path, test_data_path = obj.initiate_data_ingestion()
+    print("Train path:", train_data_path)
+    print("Test path:", test_data_path)
+
